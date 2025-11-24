@@ -342,7 +342,9 @@ namespace Overlay.NET.Directx
         }
 
         /// <summary>
-        ///     Helper method to get brush with opacity applied
+        ///     Helper method to get brush with opacity applied.
+        ///     Note: Direct2D Brush.Opacity is designed to be set before each draw call.
+        ///     This is the standard pattern and has minimal performance impact.
         /// </summary>
         /// <param name="brush">The brush identifier</param>
         /// <returns>Brush with opacity set</returns>
