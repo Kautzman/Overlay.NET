@@ -164,7 +164,7 @@ namespace Overlay.NET.Demo.Directx
 
             _rotation += 0.03f; //related to speed
 
-            if (_rotation > 50.0f) //size of the swastika
+            if (_rotation > 50.0f)
             {
                 _rotation = -50.0f;
             }
