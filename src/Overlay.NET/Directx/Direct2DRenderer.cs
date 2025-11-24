@@ -75,6 +75,16 @@ namespace Overlay.NET.Directx
         /// </summary>
         private List<SolidColorBrush> _brushContainer = new List<SolidColorBrush>(32);
 
+        /// <summary>
+        ///     The brush opacity container - stores opacity for each brush (default is 1.0)
+        /// </summary>
+        private Dictionary<int, float> _brushOpacity = new Dictionary<int, float>();
+
+        /// <summary>
+        ///     The brush default opacity container - stores default opacity for each brush to restore on Show
+        /// </summary>
+        private Dictionary<int, float> _brushDefaultOpacity = new Dictionary<int, float>();
+
         //thread safe resizing
         /// <summary>
         ///     The do resize
@@ -144,6 +154,10 @@ namespace Overlay.NET.Directx
             _brushContainer = null;
             _fontContainer = null;
             _layoutContainer = null;
+            _brushOpacity?.Clear();
+            _brushDefaultOpacity?.Clear();
+            _brushOpacity = null;
+            _brushDefaultOpacity = null;
 
             _fontFactory.Dispose();
             _factory.Dispose();
@@ -174,6 +188,8 @@ namespace Overlay.NET.Directx
                 solidColorBrush.Dispose();
             }
             _brushContainer = new List<SolidColorBrush>(BufferBrushSize);
+            _brushOpacity.Clear();
+            _brushDefaultOpacity.Clear();
         }
 
         /// <summary>
@@ -213,7 +229,10 @@ namespace Overlay.NET.Directx
         {
             _brushContainer.Add(new SolidColorBrush(_device,
                 new RawColor4((color >> 16) & 255L, (color >> 8) & 255L, (byte)color & 255L, (color >> 24) & 255L)));
-            return _brushContainer.Count - 1;
+            int brushId = _brushContainer.Count - 1;
+            _brushOpacity[brushId] = 1.0f;
+            _brushDefaultOpacity[brushId] = 1.0f;
+            return brushId;
         }
 
         /// <summary>
@@ -231,7 +250,10 @@ namespace Overlay.NET.Directx
             }
 
             _brushContainer.Add(new SolidColorBrush(_device, new RawColor4(color.R, color.G, color.B, color.A / 255.0f)));
-            return _brushContainer.Count - 1;
+            int brushId = _brushContainer.Count - 1;
+            _brushOpacity[brushId] = 1.0f;
+            _brushDefaultOpacity[brushId] = 1.0f;
+            return brushId;
         }
 
         /// <summary>
@@ -247,6 +269,92 @@ namespace Overlay.NET.Directx
             _fontContainer.Add(new TextFormat(_fontFactory, fontFamilyName, bold ? FontWeight.Bold : FontWeight.Normal,
                 italic ? FontStyle.Italic : FontStyle.Normal, size));
             return _fontContainer.Count - 1;
+        }
+
+        /// <summary>
+        ///     Sets the opacity for a brush element
+        /// </summary>
+        /// <param name="brush">The brush identifier</param>
+        /// <param name="opacity">Opacity value from 0.0 (transparent) to 1.0 (opaque)</param>
+        public void SetOpacity(int brush, float opacity)
+        {
+            if (brush < 0 || brush >= _brushContainer.Count)
+                return;
+
+            opacity = Math.Max(0.0f, Math.Min(1.0f, opacity)); // Clamp between 0 and 1
+            _brushOpacity[brush] = opacity;
+            
+            // Update default if not hiding (opacity > 0)
+            if (opacity > 0.0f)
+            {
+                _brushDefaultOpacity[brush] = opacity;
+            }
+        }
+
+        /// <summary>
+        ///     Hides a brush element by setting its opacity to 0
+        /// </summary>
+        /// <param name="brush">The brush identifier</param>
+        public void Hide(int brush)
+        {
+            if (brush < 0 || brush >= _brushContainer.Count)
+                return;
+
+            // Save current opacity as default before hiding (if not already 0)
+            if (_brushOpacity.TryGetValue(brush, out float currentOpacity) && currentOpacity > 0.0f)
+            {
+                _brushDefaultOpacity[brush] = currentOpacity;
+            }
+
+            _brushOpacity[brush] = 0.0f;
+        }
+
+        /// <summary>
+        ///     Shows a brush element by restoring its default opacity
+        /// </summary>
+        /// <param name="brush">The brush identifier</param>
+        public void Show(int brush)
+        {
+            if (brush < 0 || brush >= _brushContainer.Count)
+                return;
+
+            if (_brushDefaultOpacity.TryGetValue(brush, out float defaultOpacity))
+            {
+                _brushOpacity[brush] = defaultOpacity;
+            }
+            else
+            {
+                _brushOpacity[brush] = 1.0f;
+            }
+        }
+
+        /// <summary>
+        ///     Gets the current opacity for a brush element
+        /// </summary>
+        /// <param name="brush">The brush identifier</param>
+        /// <returns>Current opacity value (0.0 to 1.0)</returns>
+        public float GetOpacity(int brush)
+        {
+            if (brush < 0 || brush >= _brushContainer.Count)
+                return 1.0f;
+
+            return _brushOpacity.TryGetValue(brush, out float opacity) ? opacity : 1.0f;
+        }
+
+        /// <summary>
+        ///     Helper method to get brush with opacity applied.
+        ///     Note: Direct2D Brush.Opacity is designed to be set before each draw call.
+        ///     This is the standard pattern and has minimal performance impact.
+        /// </summary>
+        /// <param name="brush">The brush identifier</param>
+        /// <returns>Brush with opacity set</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private SolidColorBrush GetBrushWithOpacity(int brush)
+        {
+            var brushObj = _brushContainer[brush];
+            var opacity = _brushOpacity.TryGetValue(brush, out float op) ? op : 1.0f;
+            brushObj.Opacity = opacity;
+            return brushObj;
         }
 
         /// <summary>
@@ -294,7 +402,7 @@ namespace Overlay.NET.Directx
         /// <param name="stroke">The stroke.</param>
         /// <param name="brush">The brush.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void DrawLine(int startX, int startY, int endX, int endY, float stroke, int brush) => _device.DrawLine(new RawVector2(startX, startY), new RawVector2(endX, endY), _brushContainer[brush], stroke);
+        public void DrawLine(int startX, int startY, int endX, int endY, float stroke, int brush) => _device.DrawLine(new RawVector2(startX, startY), new RawVector2(endX, endY), GetBrushWithOpacity(brush), stroke);
 
         /// <summary>
         ///     Draws the rectangle.
@@ -306,7 +414,7 @@ namespace Overlay.NET.Directx
         /// <param name="stroke">The stroke.</param>
         /// <param name="brush">The brush.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void DrawRectangle(int x, int y, int width, int height, float stroke, int brush) => _device.DrawRectangle(new RawRectangleF(x, y, x + width, y + height), _brushContainer[brush], stroke);
+        public void DrawRectangle(int x, int y, int width, int height, float stroke, int brush) => _device.DrawRectangle(new RawRectangleF(x, y, x + width, y + height), GetBrushWithOpacity(brush), stroke);
 
         /// <summary>
         ///     Draws the circle.
@@ -317,7 +425,7 @@ namespace Overlay.NET.Directx
         /// <param name="stroke">The stroke.</param>
         /// <param name="brush">The brush.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void DrawCircle(int x, int y, int radius, float stroke, int brush) => _device.DrawEllipse(new Ellipse(new RawVector2(x, y), radius, radius), _brushContainer[brush], stroke);
+        public void DrawCircle(int x, int y, int radius, float stroke, int brush) => _device.DrawEllipse(new Ellipse(new RawVector2(x, y), radius, radius), GetBrushWithOpacity(brush), stroke);
 
         /// <summary>
         ///     Draws the box2 d.
@@ -331,9 +439,9 @@ namespace Overlay.NET.Directx
         /// <param name="interiorBrush">The interior brush.</param>
         public void DrawBox2D(int x, int y, int width, int height, float stroke, int brush, int interiorBrush)
         {
-            _device.DrawRectangle(new RawRectangleF(x, y, x + width, y + height), _brushContainer[brush], stroke);
+            _device.DrawRectangle(new RawRectangleF(x, y, x + width, y + height), GetBrushWithOpacity(brush), stroke);
             _device.FillRectangle(new RawRectangleF(x + stroke, y + stroke, x + width - stroke, y + height - stroke),
-                _brushContainer[interiorBrush]);
+                GetBrushWithOpacity(interiorBrush));
         }
 
         /// <summary>
@@ -356,28 +464,28 @@ namespace Overlay.NET.Directx
             var lineStart = new RawVector2(x, y);
             var lineEnd = new RawVector2(second.Left, second.Top);
 
-            _device.DrawRectangle(first, _brushContainer[brush], stroke);
-            _device.DrawRectangle(second, _brushContainer[brush], stroke);
+            _device.DrawRectangle(first, GetBrushWithOpacity(brush), stroke);
+            _device.DrawRectangle(second, GetBrushWithOpacity(brush), stroke);
 
-            _device.FillRectangle(first, _brushContainer[interiorBrush]);
-            _device.FillRectangle(second, _brushContainer[interiorBrush]);
+            _device.FillRectangle(first, GetBrushWithOpacity(interiorBrush));
+            _device.FillRectangle(second, GetBrushWithOpacity(interiorBrush));
 
-            _device.DrawLine(lineStart, lineEnd, _brushContainer[brush], stroke);
+            _device.DrawLine(lineStart, lineEnd, GetBrushWithOpacity(brush), stroke);
 
             lineStart.X += width;
             lineEnd.X = lineStart.X + length;
 
-            _device.DrawLine(lineStart, lineEnd, _brushContainer[brush], stroke);
+            _device.DrawLine(lineStart, lineEnd, GetBrushWithOpacity(brush), stroke);
 
             lineStart.Y += height;
             lineEnd.Y += height;
 
-            _device.DrawLine(lineStart, lineEnd, _brushContainer[brush], stroke);
+            _device.DrawLine(lineStart, lineEnd, GetBrushWithOpacity(brush), stroke);
 
             lineStart.X -= width;
             lineEnd.X -= width;
 
-            _device.DrawLine(lineStart, lineEnd, _brushContainer[brush], stroke);
+            _device.DrawLine(lineStart, lineEnd, GetBrushWithOpacity(brush), stroke);
         }
 
         /// <summary>
@@ -398,25 +506,25 @@ namespace Overlay.NET.Directx
             var lineStart = new RawVector2(x, y);
             var lineEnd = new RawVector2(second.Left, second.Top);
 
-            _device.DrawRectangle(first, _brushContainer[brush], stroke);
-            _device.DrawRectangle(second, _brushContainer[brush], stroke);
+            _device.DrawRectangle(first, GetBrushWithOpacity(brush), stroke);
+            _device.DrawRectangle(second, GetBrushWithOpacity(brush), stroke);
 
-            _device.DrawLine(lineStart, lineEnd, _brushContainer[brush], stroke);
+            _device.DrawLine(lineStart, lineEnd, GetBrushWithOpacity(brush), stroke);
 
             lineStart.X += width;
             lineEnd.X = lineStart.X + length;
 
-            _device.DrawLine(lineStart, lineEnd, _brushContainer[brush], stroke);
+            _device.DrawLine(lineStart, lineEnd, GetBrushWithOpacity(brush), stroke);
 
             lineStart.Y += height;
             lineEnd.Y += height;
 
-            _device.DrawLine(lineStart, lineEnd, _brushContainer[brush], stroke);
+            _device.DrawLine(lineStart, lineEnd, GetBrushWithOpacity(brush), stroke);
 
             lineStart.X -= width;
             lineEnd.X -= width;
 
-            _device.DrawLine(lineStart, lineEnd, _brushContainer[brush], stroke);
+            _device.DrawLine(lineStart, lineEnd, GetBrushWithOpacity(brush), stroke);
         }
 
         /// <summary>
@@ -435,8 +543,8 @@ namespace Overlay.NET.Directx
             var third = new RawVector2(x, y - length);
             var fourth = new RawVector2(x, y + length);
 
-            _device.DrawLine(first, second, _brushContainer[brush], stroke);
-            _device.DrawLine(third, fourth, _brushContainer[brush], stroke);
+            _device.DrawLine(first, second, GetBrushWithOpacity(brush), stroke);
+            _device.DrawLine(third, fourth, GetBrushWithOpacity(brush), stroke);
         }
 
         /// <summary>
@@ -455,16 +563,16 @@ namespace Overlay.NET.Directx
             var second = new RawVector2(x, y + length);
             var third = new RawVector2(x + length, y);
 
-            _device.DrawLine(first, second, _brushContainer[brush], stroke);
-            _device.DrawLine(first, third, _brushContainer[brush], stroke);
+            _device.DrawLine(first, second, GetBrushWithOpacity(brush), stroke);
+            _device.DrawLine(first, third, GetBrushWithOpacity(brush), stroke);
 
             first.Y += height;
             second.Y = first.Y - length;
             third.Y = first.Y;
             third.X = first.X + length;
 
-            _device.DrawLine(first, second, _brushContainer[brush], stroke);
-            _device.DrawLine(first, third, _brushContainer[brush], stroke);
+            _device.DrawLine(first, second, GetBrushWithOpacity(brush), stroke);
+            _device.DrawLine(first, third, GetBrushWithOpacity(brush), stroke);
 
             first.X = x + width;
             first.Y = y;
@@ -473,8 +581,8 @@ namespace Overlay.NET.Directx
             third.X = first.X;
             third.Y = first.Y + length;
 
-            _device.DrawLine(first, second, _brushContainer[brush], stroke);
-            _device.DrawLine(first, third, _brushContainer[brush], stroke);
+            _device.DrawLine(first, second, GetBrushWithOpacity(brush), stroke);
+            _device.DrawLine(first, third, GetBrushWithOpacity(brush), stroke);
 
             first.Y += height;
             second.X += length;
@@ -482,8 +590,8 @@ namespace Overlay.NET.Directx
             third.Y = first.Y;
             third.X = first.X - length;
 
-            _device.DrawLine(first, second, _brushContainer[brush], stroke);
-            _device.DrawLine(first, third, _brushContainer[brush], stroke);
+            _device.DrawLine(first, second, GetBrushWithOpacity(brush), stroke);
+            _device.DrawLine(first, third, GetBrushWithOpacity(brush), stroke);
         }
 
         /// <summary>
@@ -502,7 +610,7 @@ namespace Overlay.NET.Directx
         {
             var first = new RawRectangleF(x, y, x + width, y + height);
 
-            _device.DrawRectangle(first, _brushContainer[brush], stroke);
+            _device.DrawRectangle(first, GetBrushWithOpacity(brush), stroke);
 
             if (Math.Abs(value) < 0)
             {
@@ -511,7 +619,7 @@ namespace Overlay.NET.Directx
 
             first.Top += height - height / 100.0f * value;
 
-            _device.FillRectangle(first, _brushContainer[interiorBrush]);
+            _device.FillRectangle(first, GetBrushWithOpacity(interiorBrush));
         }
 
         /// <summary>
@@ -530,7 +638,7 @@ namespace Overlay.NET.Directx
         {
             var first = new RawRectangleF(x, y, x + width, y + height);
 
-            _device.DrawRectangle(first, _brushContainer[brush], stroke);
+            _device.DrawRectangle(first, GetBrushWithOpacity(brush), stroke);
 
             if (Math.Abs(value) < 0)
             {
@@ -539,7 +647,7 @@ namespace Overlay.NET.Directx
 
             first.Right -= width - width / 100.0f * value;
 
-            _device.FillRectangle(first, _brushContainer[interiorBrush]);
+            _device.FillRectangle(first, GetBrushWithOpacity(interiorBrush));
         }
 
         /// <summary>
@@ -551,7 +659,7 @@ namespace Overlay.NET.Directx
         /// <param name="height">The height.</param>
         /// <param name="brush">The brush.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void FillRectangle(int x, int y, int width, int height, int brush) => _device.FillRectangle(new RawRectangleF(x, y, x + width, y + height), _brushContainer[brush]);
+        public void FillRectangle(int x, int y, int width, int height, int brush) => _device.FillRectangle(new RawRectangleF(x, y, x + width, y + height), GetBrushWithOpacity(brush));
 
         /// <summary>
         ///     Fills the circle.
@@ -561,7 +669,7 @@ namespace Overlay.NET.Directx
         /// <param name="radius">The radius.</param>
         /// <param name="brush">The brush.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void FillCircle(int x, int y, int radius, int brush) => _device.FillEllipse(new Ellipse(new RawVector2(x, y), radius, radius), _brushContainer[brush]);
+        public void FillCircle(int x, int y, int radius, int brush) => _device.FillEllipse(new Ellipse(new RawVector2(x, y), radius, radius), GetBrushWithOpacity(brush));
 
         /// <summary>
         ///     Bordereds the line.
@@ -575,17 +683,17 @@ namespace Overlay.NET.Directx
         /// <param name="borderBrush">The border brush.</param>
         public void BorderedLine(int startX, int startY, int endX, int endY, float stroke, int brush, int borderBrush)
         {
-            _device.DrawLine(new RawVector2(startX, startY), new RawVector2(endX, endY), _brushContainer[brush], stroke);
+            _device.DrawLine(new RawVector2(startX, startY), new RawVector2(endX, endY), GetBrushWithOpacity(brush), stroke);
 
             _device.DrawLine(new RawVector2(startX, startY - stroke), new RawVector2(endX, endY - stroke),
-                _brushContainer[borderBrush], stroke);
+                GetBrushWithOpacity(borderBrush), stroke);
             _device.DrawLine(new RawVector2(startX, startY + stroke), new RawVector2(endX, endY + stroke),
-                _brushContainer[borderBrush], stroke);
+                GetBrushWithOpacity(borderBrush), stroke);
 
             _device.DrawLine(new RawVector2(startX - stroke / 2, startY - stroke * 1.5f),
-                new RawVector2(startX - stroke / 2, startY + stroke * 1.5f), _brushContainer[borderBrush], stroke);
+                new RawVector2(startX - stroke / 2, startY + stroke * 1.5f), GetBrushWithOpacity(borderBrush), stroke);
             _device.DrawLine(new RawVector2(endX - stroke / 2, endY - stroke * 1.5f),
-                new RawVector2(endX - stroke / 2, endY + stroke * 1.5f), _brushContainer[borderBrush], stroke);
+                new RawVector2(endX - stroke / 2, endY + stroke * 1.5f), GetBrushWithOpacity(borderBrush), stroke);
         }
 
         /// <summary>
@@ -604,14 +712,14 @@ namespace Overlay.NET.Directx
         {
             _device.DrawRectangle(
                 new RawRectangleF(x - (stroke - borderStroke), y - (stroke - borderStroke),
-                    x + width + stroke - borderStroke, y + height + stroke - borderStroke), _brushContainer[borderBrush],
+                    x + width + stroke - borderStroke, y + height + stroke - borderStroke), GetBrushWithOpacity(borderBrush),
                 borderStroke);
 
-            _device.DrawRectangle(new RawRectangleF(x, y, x + width, y + height), _brushContainer[brush], stroke);
+            _device.DrawRectangle(new RawRectangleF(x, y, x + width, y + height), GetBrushWithOpacity(brush), stroke);
 
             _device.DrawRectangle(
                 new RawRectangleF(x + (stroke - borderStroke), y + (stroke - borderStroke),
-                    x + width - stroke + borderStroke, y + height - stroke + borderStroke), _brushContainer[borderBrush],
+                    x + width - stroke + borderStroke, y + height - stroke + borderStroke), GetBrushWithOpacity(borderBrush),
                 borderStroke);
         }
 
@@ -627,12 +735,12 @@ namespace Overlay.NET.Directx
         public void BorderedCircle(int x, int y, int radius, float stroke, int brush, int borderBrush)
         {
             _device.DrawEllipse(new Ellipse(new RawVector2(x, y), radius + stroke, radius + stroke),
-                _brushContainer[borderBrush], stroke);
+                GetBrushWithOpacity(borderBrush), stroke);
 
-            _device.DrawEllipse(new Ellipse(new RawVector2(x, y), radius, radius), _brushContainer[brush], stroke);
+            _device.DrawEllipse(new Ellipse(new RawVector2(x, y), radius, radius), GetBrushWithOpacity(brush), stroke);
 
             _device.DrawEllipse(new Ellipse(new RawVector2(x, y), radius - stroke, radius - stroke),
-                _brushContainer[borderBrush], stroke);
+                GetBrushWithOpacity(borderBrush), stroke);
         }
 
         /// <summary>
@@ -668,12 +776,12 @@ namespace Overlay.NET.Directx
                 }
 
                 _device.DrawTextLayout(new RawVector2(x, y), _layoutContainer[bufferPos].TextLayout,
-                    _brushContainer[brush], DrawTextOptions.NoSnap);
+                    GetBrushWithOpacity(brush), DrawTextOptions.NoSnap);
             }
             else
             {
                 var layout = new TextLayout(_fontFactory, text, _fontContainer[font], float.MaxValue, float.MaxValue);
-                _device.DrawTextLayout(new RawVector2(x, y), layout, _brushContainer[brush]);
+                _device.DrawTextLayout(new RawVector2(x, y), layout, GetBrushWithOpacity(brush));
                 layout.Dispose();
             }
         }
@@ -688,6 +796,23 @@ namespace Overlay.NET.Directx
         /// <param name="height">The height to draw the image.</param>
         public void DrawImage(string imagePath, int x, int y, int width, int height)
         {
+            DrawImage(imagePath, x, y, width, height, -1);
+        }
+
+        /// <summary>
+        ///     Draws an image as a texture with opacity control via brush.
+        /// </summary>
+        /// <param name="imagePath">The file path of the image to draw.</param>
+        /// <param name="x">The x-coordinate of the top-left corner.</param>
+        /// <param name="y">The y-coordinate of the top-left corner.</param>
+        /// <param name="width">The width to draw the image.</param>
+        /// <param name="height">The height to draw the image.</param>
+        /// <param name="brush">The brush identifier for opacity control. Use -1 for full opacity.</param>
+        public void DrawImage(string imagePath, int x, int y, int width, int height, int brush)
+        {
+            // Get opacity from brush if provided, otherwise use 1.0
+            float opacity = (brush >= 0) ? GetOpacity(brush) : 1.0f;
+
             // Load the image from the file path
             using (var bitmapDecoder = new SharpDX.WIC.BitmapDecoder(
                 new SharpDX.WIC.ImagingFactory2(),
@@ -706,9 +831,11 @@ namespace Overlay.NET.Directx
                     {
                         // Draw the bitmap onto the render target
                         var destinationRectangle = new RawRectangleF(x, y, x + width, y + height);
-                        _device.DrawBitmap(bitmap, destinationRectangle, 1.0f, BitmapInterpolationMode.Linear);
+                        _device.DrawBitmap(bitmap, destinationRectangle, opacity, BitmapInterpolationMode.Linear);
                     }
                 }
+            }
+        }
             }
         }
     }

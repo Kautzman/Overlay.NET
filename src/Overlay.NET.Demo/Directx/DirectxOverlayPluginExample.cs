@@ -20,8 +20,12 @@ namespace Overlay.NET.Demo.Directx
         private int _interiorBrush;
         private int _redBrush;
         private int _redOpacityBrush;
+        private int _greenBrush;
+        private int _blueBrush;
         private float _rotation;
         private Stopwatch _watch;
+        private float _opacityDemo = 1.0f;
+        private bool _opacityIncreasing = false;
 
         public override void Initialize(IntPtr targetWindowHandle)
         {
@@ -52,6 +56,8 @@ namespace Overlay.NET.Demo.Directx
             _redBrush = OverlayWindow.Graphics.CreateBrush(0x7FFF0000);
             _redOpacityBrush = OverlayWindow.Graphics.CreateBrush(Color.FromArgb(80, 255, 0, 0));
             _interiorBrush = OverlayWindow.Graphics.CreateBrush(0x7FFFFF00);
+            _greenBrush = OverlayWindow.Graphics.CreateBrush(Color.FromArgb(255, 0, 255, 0));
+            _blueBrush = OverlayWindow.Graphics.CreateBrush(Color.FromArgb(255, 0, 0, 255));
 
             _font = OverlayWindow.Graphics.CreateFont("Arial", 20);
             _hugeFont = OverlayWindow.Graphics.CreateFont("Arial", 50, true);
@@ -173,6 +179,47 @@ namespace Overlay.NET.Demo.Directx
                 _displayFps++;
 
             OverlayWindow.Graphics.DrawText("FPS: " + _i, _hugeFont, _redBrush, 400, 600, false);
+
+            // Opacity demonstration - third row
+            OverlayWindow.Graphics.DrawText("Opacity Demo (Animated)", _font, _redBrush, 50, 450);
+            
+            // Animate opacity
+            if (_opacityIncreasing)
+            {
+                _opacityDemo += 0.01f;
+                if (_opacityDemo >= 1.0f)
+                {
+                    _opacityDemo = 1.0f;
+                    _opacityIncreasing = false;
+                }
+            }
+            else
+            {
+                _opacityDemo -= 0.01f;
+                if (_opacityDemo <= 0.0f)
+                {
+                    _opacityDemo = 0.0f;
+                    _opacityIncreasing = true;
+                }
+            }
+
+            // Set opacity and draw shapes
+            OverlayWindow.Graphics.SetOpacity(_greenBrush, _opacityDemo);
+            OverlayWindow.Graphics.DrawText($"Opacity: {_opacityDemo:F2}", _font, _greenBrush, 50, 480);
+            OverlayWindow.Graphics.FillRectangle(50, 510, 100, 50, _greenBrush);
+
+            // Hide/Show demo
+            OverlayWindow.Graphics.DrawText("Hide/Show Demo", _font, _redBrush, 250, 450);
+            if (_i % 2 == 0)
+            {
+                OverlayWindow.Graphics.Hide(_blueBrush);
+            }
+            else
+            {
+                OverlayWindow.Graphics.Show(_blueBrush);
+            }
+            OverlayWindow.Graphics.DrawText("Blinking", _font, _blueBrush, 250, 480);
+            OverlayWindow.Graphics.FillCircle(300, 535, 25, _blueBrush);
 
             OverlayWindow.Graphics.EndScene();
         }
