@@ -677,5 +677,39 @@ namespace Overlay.NET.Directx
                 layout.Dispose();
             }
         }
+
+        /// <summary>
+        ///     Draws an image as a texture.
+        /// </summary>
+        /// <param name="imagePath">The file path of the image to draw.</param>
+        /// <param name="x">The x-coordinate of the top-left corner.</param>
+        /// <param name="y">The y-coordinate of the top-left corner.</param>
+        /// <param name="width">The width to draw the image.</param>
+        /// <param name="height">The height to draw the image.</param>
+        public void DrawImage(string imagePath, int x, int y, int width, int height)
+        {
+            // Load the image from the file path
+            using (var bitmapDecoder = new SharpDX.WIC.BitmapDecoder(
+                new SharpDX.WIC.ImagingFactory2(),
+                imagePath,
+                SharpDX.IO.NativeFileAccess.Read,
+                SharpDX.WIC.DecodeOptions.CacheOnDemand))
+            {
+                using (var formatConverter = new SharpDX.WIC.FormatConverter(new SharpDX.WIC.ImagingFactory2()))
+                {
+                    formatConverter.Initialize(
+                        bitmapDecoder.GetFrame(0),
+                        SharpDX.WIC.PixelFormat.Format32bppPRGBA);
+
+                    // Create a Direct2D bitmap from the WIC bitmap
+                    using (var bitmap = SharpDX.Direct2D1.Bitmap1.FromWicBitmap(_device, formatConverter))
+                    {
+                        // Draw the bitmap onto the render target
+                        var destinationRectangle = new RawRectangleF(x, y, x + width, y + height);
+                        _device.DrawBitmap(bitmap, destinationRectangle, 1.0f, BitmapInterpolationMode.Linear);
+                    }
+                }
+            }
+        }
     }
 }

@@ -153,6 +153,9 @@ namespace Overlay.NET.Demo.Directx
             OverlayWindow.Graphics.DrawText("FillRectangle", _font, _redBrush, 950, 250);
             OverlayWindow.Graphics.FillRectangle(950, 300, 50, 100, _redBrush);
 
+            OverlayWindow.Graphics.DrawText("DrawTexture", _font, _redBrush, 1100, 250);
+            OverlayWindow.Graphics.DrawImage(@"C:\TextureTest\av.png", 1100, 300, 100, 100);
+
             _rotation += 0.03f; //related to speed
 
             if (_rotation > 50.0f) //size of the swastika

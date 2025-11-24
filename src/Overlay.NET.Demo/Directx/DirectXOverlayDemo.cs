@@ -1,6 +1,9 @@
 using Overlay.NET.Common;
 using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Runtime.InteropServices;
+using System.Text;
 
 namespace Overlay.NET.Demo.Directx
 {
@@ -8,10 +11,48 @@ namespace Overlay.NET.Demo.Directx
     {
         private OverlayPlugin _directXoverlayPluginExample;
 
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern int GetWindowTextLength(IntPtr hWnd);
+
+        private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+        private static List<string> EnumerateWindows()
+        {
+            var windowTitles = new List<string>();
+
+            EnumWindows((hWnd, lParam) =>
+            {
+                int length = GetWindowTextLength(hWnd);
+                if (length > 0)
+                {
+                    var builder = new StringBuilder(length + 1);
+                    GetWindowText(hWnd, builder, builder.Capacity);
+                    windowTitles.Add(builder.ToString());
+                }
+                return true; // Continue enumeration
+            }, IntPtr.Zero);
+
+            return windowTitles;
+        }
+
         public void StartDemo()
         {
             Log.Debug(@"Please type the process name of the window you want to attach to, e.g 'notepad.");
             Log.Debug("Note: If there is more than one process found, the first will be used.");
+
+            // Enumerate all open windows and log their titles
+            var openWindows = EnumerateWindows();
+            Log.Debug("Open windows:");
+            foreach (var title in openWindows)
+            {
+                Log.Debug(title);
+            }
 
             var windowName = Console.ReadLine();
 
