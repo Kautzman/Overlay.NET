@@ -283,7 +283,12 @@ namespace Overlay.NET.Directx
 
             opacity = Math.Max(0.0f, Math.Min(1.0f, opacity)); // Clamp between 0 and 1
             _brushOpacity[brush] = opacity;
-            _brushDefaultOpacity[brush] = opacity; // Update default so Show restores this value
+            
+            // Update default if not hiding (opacity > 0)
+            if (opacity > 0.0f)
+            {
+                _brushDefaultOpacity[brush] = opacity;
+            }
         }
 
         /// <summary>
@@ -294,6 +299,12 @@ namespace Overlay.NET.Directx
         {
             if (brush < 0 || brush >= _brushContainer.Count)
                 return;
+
+            // Save current opacity as default before hiding (if not already 0)
+            if (_brushOpacity.TryGetValue(brush, out float currentOpacity) && currentOpacity > 0.0f)
+            {
+                _brushDefaultOpacity[brush] = currentOpacity;
+            }
 
             _brushOpacity[brush] = 0.0f;
         }
