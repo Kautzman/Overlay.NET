@@ -283,7 +283,7 @@ namespace Overlay.NET.Directx
 
             opacity = Math.Max(0.0f, Math.Min(1.0f, opacity)); // Clamp between 0 and 1
             _brushOpacity[brush] = opacity;
-            
+
             // Update default if not hiding (opacity > 0)
             if (opacity > 0.0f)
             {
@@ -479,8 +479,7 @@ namespace Overlay.NET.Directx
 
             lineStart.Y += height;
             lineEnd.Y += height;
-
-            _device.DrawLine(lineStart, lineEnd, GetBrushWithOpacity(brush), stroke);
+             
 
             lineStart.X -= width;
             lineEnd.X -= width;
@@ -834,8 +833,6 @@ namespace Overlay.NET.Directx
                         _device.DrawBitmap(bitmap, destinationRectangle, opacity, BitmapInterpolationMode.Linear);
                     }
                 }
-            }
-        }
             }
         }
     }

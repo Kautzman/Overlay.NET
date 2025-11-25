@@ -16,7 +16,7 @@ namespace Overlay.NET.Demo.Directx
         private int _displayFps;
         private int _font;
         private int _hugeFont;
-        private int _i;
+        private int _fps;
         private int _interiorBrush;
         private int _redBrush;
         private int _redOpacityBrush;
@@ -64,7 +64,7 @@ namespace Overlay.NET.Demo.Directx
 
             _rotation = 0.0f;
             _displayFps = 0;
-            _i = 0;
+            _fps = 0;
             // Set up update interval and register events for the tick engine.
 
             _tickEngine.PreTick += OnPreTick;
@@ -171,14 +171,14 @@ namespace Overlay.NET.Demo.Directx
 
             if (_watch.ElapsedMilliseconds > 1000)
             {
-                _i = _displayFps;
+                _fps = _displayFps;
                 _displayFps = 0;
                 _watch.Restart();
             }
             else
                 _displayFps++;
 
-            OverlayWindow.Graphics.DrawText("FPS: " + _i, _hugeFont, _redBrush, 400, 600, false);
+            OverlayWindow.Graphics.DrawText("FPS: " + _fps, _hugeFont, _redBrush, 400, 600, false);
 
             // Opacity demonstration - third row
             OverlayWindow.Graphics.DrawText("Opacity Demo (Animated)", _font, _redBrush, 50, 450);
@@ -210,7 +210,7 @@ namespace Overlay.NET.Demo.Directx
 
             // Hide/Show demo
             OverlayWindow.Graphics.DrawText("Hide/Show Demo", _font, _redBrush, 250, 450);
-            if (_i % 2 == 0)
+            if (_fps % 2 == 0)
             {
                 OverlayWindow.Graphics.Hide(_blueBrush);
             }
